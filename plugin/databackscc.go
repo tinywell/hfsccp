@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -35,13 +33,17 @@ func (s *DataBackSCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
 func (s *DataBackSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	logger.Info("Invoke")
 	checkExist()
-	_, args := stub.GetFunctionAndParameters()
+	args := stub.GetStringArgs()
 	for _, s := range args {
-		logger.Infof("Back String: '%s'\n", s)
+		logger.Infof("BackUp String: '%s'\n", s)
 		filePath := filepath.Join(backpath, backfile)
-		err := ioutil.WriteFile(filePath, []byte(s), os.ModeAppend)
+		f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err)
+		}
+		_, err = f.WriteString(s + "\n")
+		if err != nil {
+			logger.Error(err)
 		}
 	}
 	return shim.Success(nil)
@@ -49,11 +51,25 @@ func (s *DataBackSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 
 func checkExist() {
 	filePath := filepath.Join(backpath, backfile)
-	_, err := os.Open(filePath)
-	if os.IsExist(err) {
+	_, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsExist(err) {
+			logger.Debug("Exist")
+			return
+		}
+	} else {
 		return
 	}
-	os.MkdirAll(backpath, 666)
+	logger.Infof("Not Exist, Create Dir %s", backpath)
+	err = os.MkdirAll(backpath, 666)
+	if err != nil {
+		logger.Error(err)
+	}
+	logger.Infof("Create File %s", filePath)
+	_, err = os.Create(filePath)
+	if err != nil {
+		logger.Error(err)
+	}
 }
 
 func main() {}
